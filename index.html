@@ -36,6 +36,7 @@
             background: #2a2a2a;
             padding: 10px;
             border-radius: 5px;
+            cursor: pointer;
         }
         .completed {
             text-decoration: line-through;
@@ -49,19 +50,35 @@
             color: #55ff55;
             text-align: center;
         }
+        .notes {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+        }
+        .notes.visible {
+            display: block;
+        }
+        textarea {
+            width: 100%;
+            background: #444;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            padding: 5px;
+        }
     </style>
 </head>
 <body>
     <h1>Minhas Tarefas</h1>
     <input type="text" id="taskInput" placeholder="Digite uma tarefa">
-    <input type="date" id="dueDate" placeholder="Data de término">
+    <input type="date" id="dueDate" placeholder="Data de término (opcional)">
     <input type="number" id="priority" min="1" max="1000" placeholder="Prioridade (1-1000)">
     <button onclick="addTask()">Adicionar</button>
     <div id="error"></div>
     <div id="success"></div>
     <ul id="taskList"></ul>
 
-    <!-- Firebase SDK (versão modular) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
@@ -83,7 +100,6 @@
             const tasksRef = ref(db, 'tasks');
             console.log("Firebase conectado com sucesso!");
 
-            // Carrega as tarefas ao entrar e atualiza em tempo real
             onValue(tasksRef, (snapshot) => {
                 const tasks = snapshot.val() || {};
                 const taskList = document.getElementById('taskList');
@@ -104,17 +120,16 @@
                 document.getElementById('error').textContent = "Erro ao carregar tarefas: " + error.message;
             });
 
-            // Função para adicionar tarefa
             window.addTask = function() {
                 const taskInput = document.getElementById('taskInput');
                 const dueDateInput = document.getElementById('dueDate');
                 const priorityInput = document.getElementById('priority');
                 const taskText = taskInput.value.trim();
-                const dueDate = dueDateInput.value;
+                const dueDate = dueDateInput.value || null; // Data opcional
                 const priority = parseInt(priorityInput.value) || 1;
 
-                if (taskText === '' || !dueDate) {
-                    document.getElementById('error').textContent = "Preencha a tarefa e a data!";
+                if (taskText === '') {
+                    document.getElementById('error').textContent = "Preencha a tarefa!";
                     return;
                 }
 
@@ -122,6 +137,7 @@
                     text: taskText,
                     dueDate: dueDate,
                     priority: Math.min(Math.max(priority, 1), 1000),
+                    notes: "", // Campo de notas inicia vazio
                     completed: false
                 }).then(() => {
                     taskInput.value = '';
@@ -135,7 +151,6 @@
                 });
             };
 
-            // Função para marcar/desmarcar tarefa
             window.toggleTask = function(key) {
                 const taskRef = ref(db, `tasks/${key}`);
                 onValue(taskRef, (snapshot) => {
@@ -144,20 +159,36 @@
                 }, { onlyOnce: true });
             };
 
-            // Função para excluir tarefa
             window.deleteTask = function(key) {
                 const taskRef = ref(db, `tasks/${key}`);
                 remove(taskRef);
             };
 
-            // Função para criar elemento de tarefa
+            window.showNotes = function(key, li) {
+                const notesDiv = li.querySelector('.notes');
+                if (notesDiv.classList.contains('visible')) {
+                    notesDiv.classList.remove('visible');
+                } else {
+                    notesDiv.classList.add('visible');
+                }
+            };
+
+            window.updateNotes = function(key, textarea) {
+                const taskRef = ref(db, `tasks/${key}`);
+                update(taskRef, { notes: textarea.value });
+            };
+
             function createTaskElement(task, key) {
                 const li = document.createElement('li');
                 li.className = task.completed ? 'completed' : '';
+                li.onclick = () => showNotes(key, li); // Clica na tarefa para mostrar notas
                 li.innerHTML = `
-                    <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="toggleTask('${key}')">
+                    <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTask('${key}')">
                     ${task.text} | Data: ${task.dueDate || 'Sem data'} | Prioridade: ${task.priority}
-                    <button onclick="deleteTask('${key}')">Excluir</button>
+                    <button onclick="event.stopPropagation(); deleteTask('${key}')">Excluir</button>
+                    <div class="notes">
+                        <textarea rows="3" onchange="updateNotes('${key}', this)">${task.notes || ''}</textarea>
+                    </div>
                 `;
                 return li;
             }
