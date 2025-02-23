@@ -125,7 +125,7 @@
                 const dueDateInput = document.getElementById('dueDate');
                 const priorityInput = document.getElementById('priority');
                 const taskText = taskInput.value.trim();
-                const dueDate = dueDateInput.value || null; // Data opcional
+                let dueDate = dueDateInput.value || null;
                 const priority = parseInt(priorityInput.value) || 1;
 
                 if (taskText === '') {
@@ -133,11 +133,18 @@
                     return;
                 }
 
+                // Se a data estiver incompleta, usa o mês e ano atuais
+                if (dueDate) {
+                    const [year, month, day] = dueDate.split('-');
+                    const now = new Date();
+                    dueDate = `${year || now.getFullYear()}-${month || String(now.getMonth() + 1).padStart(2, '0')}-${day || '01'}`;
+                }
+
                 push(tasksRef, {
                     text: taskText,
                     dueDate: dueDate,
                     priority: Math.min(Math.max(priority, 1), 1000),
-                    notes: "", // Campo de notas inicia vazio
+                    notes: "",
                     completed: false
                 }).then(() => {
                     taskInput.value = '';
@@ -184,7 +191,7 @@
                 const li = document.createElement('li');
                 li.className = task.completed ? 'completed' : '';
                 li.onclick = (event) => {
-                    if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON') {
+                    if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON' && event.target.tagName !== 'TEXTAREA') {
                         showNotes(key, li);
                     }
                 };
@@ -193,7 +200,7 @@
                     ${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}
                     <button onclick="event.stopPropagation(); deleteTask('${key}')">Excluir</button>
                     <div class="notes">
-                        <textarea rows="3" onchange="updateNotes('${key}', this)">${task.notes || ''}</textarea>
+                        <textarea rows="3" onchange="updateNotes('${key}', this)" onclick="event.stopPropagation();">${task.notes || ''}</textarea>
                     </div>
                 `;
                 return li;
