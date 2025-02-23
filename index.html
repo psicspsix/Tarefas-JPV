@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Tarefas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        h1 {
+            text-align: center;
+            color: #ffffff;
+        }
+        input, button {
+            font-size: 18px;
+            padding: 10px;
+            margin: 5px;
+            background: #333;
+            color: #e0e0e0;
+            border: 1px solid #555;
+        }
+        button:hover {
+            background: #555;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            font-size: 18px;
+            margin: 10px 0;
+            background: #2a2a2a;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .completed {
+            text-decoration: line-through;
+            color: #888;
+        }
+        #error {
+            color: #ff5555;
+            text-align: center;
+        }
+        #success {
+            color: #55ff55;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Minhas Tarefas</h1>
+    <input type="text" id="taskInput" placeholder="Digite uma tarefa">
+    <input type="date" id="dueDate" placeholder="Data de término">
+    <input type="number" id="priority" min="1" max="1000" placeholder="Prioridade (1-1000)">
+    <button onclick="addTask()">Adicionar</button>
+    <div id="error"></div>
+    <div id="success"></div>
+    <ul id="taskList"></ul>
+
+    <!-- Firebase SDK (versão modular) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBiFPswIXLxgaHwxXlDX0ov4d0WYa6xJvk",
+            authDomain: "tarefas-jpv.firebaseapp.com",
+            projectId: "tarefas-jpv",
+            storageBucket: "tarefas-jpv.firebasestorage.app",
+            messagingSenderId: "641273600681",
+            appId: "1:641273600681:web:2873afa0828d9332a9e7b8",
+            measurementId: "G-X3ZS96CKF2",
+            databaseURL: "https://tarefas-jpv-default-rtdb.firebaseio.com"
+        };
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            const db = getDatabase(app);
+            const tasksRef = ref(db, 'tasks');
+            console.log("Firebase conectado com sucesso!");
+
+            // Carrega as tarefas ao entrar e atualiza em tempo real
+            onValue(tasksRef, (snapshot) => {
+                const tasks = snapshot.val() || {};
+                const taskList = document.getElementById('taskList');
+                taskList.innerHTML = tasks ? '' : '<li>Sem tarefas ainda.</li>';
+                const taskArray = Object.entries(tasks).sort((a, b) => {
+                    const dateA = a[1].dueDate || '9999-12-31';
+                    const dateB = b[1].dueDate || '9999-12-31';
+                    if (dateA === dateB) {
+                        return b[1].priority - a[1].priority;
+                    }
+                    return dateA.localeCompare(dateB);
+                });
+                taskArray.forEach(([key, task]) => {
+                    const li = createTaskElement(task, key);
+                    taskList.appendChild(li);
+                });
+            }, (error) => {
+                document.getElementById('error').textContent = "Erro ao carregar tarefas: " + error.message;
+            });
+
+            // Função para adicionar tarefa
+            window.addTask = function() {
+                const taskInput = document.getElementById('taskInput');
+                const dueDateInput = document.getElementById('dueDate');
+                const priorityInput = document.getElementById('priority');
+                const taskText = taskInput.value.trim();
+                const dueDate = dueDateInput.value;
+                const priority = parseInt(priorityInput.value) || 1;
+
+                if (taskText === '' || !dueDate) {
+                    document.getElementById('error').textContent = "Preencha a tarefa e a data!";
+                    return;
+                }
+
+                push(tasksRef, {
+                    text: taskText,
+                    dueDate: dueDate,
+                    priority: Math.min(Math.max(priority, 1), 1000),
+                    completed: false
+                }).then(() => {
+                    taskInput.value = '';
+                    dueDateInput.value = '';
+                    priorityInput.value = '';
+                    document.getElementById('error').textContent = '';
+                    document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
+                    setTimeout(() => document.getElementById('success').textContent = '', 2000);
+                }).catch((error) => {
+                    document.getElementById('error').textContent = "Erro ao adicionar: " + error.message;
+                });
+            };
+
+            // Função para marcar/desmarcar tarefa
+            window.toggleTask = function(key) {
+                const taskRef = ref(db, `tasks/${key}`);
+                onValue(taskRef, (snapshot) => {
+                    const task = snapshot.val();
+                    update(taskRef, { completed: !task.completed });
+                }, { onlyOnce: true });
+            };
+
+            // Função para excluir tarefa
+            window.deleteTask = function(key) {
+                const taskRef = ref(db, `tasks/${key}`);
+                remove(taskRef);
+            };
+
+            // Função para criar elemento de tarefa
+            function createTaskElement(task, key) {
+                const li = document.createElement('li');
+                li.className = task.completed ? 'completed' : '';
+                li.innerHTML = `
+                    <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="toggleTask('${key}')">
+                    ${task.text} | Data: ${task.dueDate || 'Sem data'} | Prioridade: ${task.priority}
+                    <button onclick="deleteTask('${key}')">Excluir</button>
+                `;
+                return li;
+            }
+        } catch (error) {
+            document.getElementById('error').textContent = "Erro ao conectar ao Firebase: " + error.message;
+        }
+    </script>
+</body>
+</html>
