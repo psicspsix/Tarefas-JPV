@@ -84,7 +84,7 @@
         import { getDatabase, ref, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
-            apiKey: "AIzaSyBiFPswIXLxgaHwxXlDX0ov4d0WYa6xJvk",
+            apiKey: "AIzxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxJvk",
             authDomain: "tarefas-jpv.firebaseapp.com",
             projectId: "tarefas-jpv",
             storageBucket: "tarefas-jpv.firebasestorage.app",
@@ -133,13 +133,6 @@
                     return;
                 }
 
-                // Se a data estiver incompleta, usa o mês e ano atuais
-                if (dueDate) {
-                    const [year, month, day] = dueDate.split('-');
-                    const now = new Date();
-                    dueDate = `${year || now.getFullYear()}-${month || String(now.getMonth() + 1).padStart(2, '0')}-${day || '01'}`;
-                }
-
                 push(tasksRef, {
                     text: taskText,
                     dueDate: dueDate,
@@ -171,7 +164,7 @@
                 remove(taskRef);
             };
 
-            window.showNotes = function(key, li) {
+            window.toggleNotes = function(key, li) {
                 const notesDiv = li.querySelector('.notes');
                 notesDiv.classList.toggle('visible');
             };
@@ -190,14 +183,9 @@
             function createTaskElement(task, key) {
                 const li = document.createElement('li');
                 li.className = task.completed ? 'completed' : '';
-                li.onclick = (event) => {
-                    if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON' && event.target.tagName !== 'TEXTAREA') {
-                        showNotes(key, li);
-                    }
-                };
                 li.innerHTML = `
                     <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTask('${key}')">
-                    ${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}
+                    <span onclick="toggleNotes('${key}', this.parentElement)">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                     <button onclick="event.stopPropagation(); deleteTask('${key}')">Excluir</button>
                     <div class="notes">
                         <textarea rows="3" onchange="updateNotes('${key}', this)" onclick="event.stopPropagation();">${task.notes || ''}</textarea>
