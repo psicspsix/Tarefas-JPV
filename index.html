@@ -23,6 +23,9 @@
             color: #e0e0e0;
             border: 1px solid #555;
         }
+        #taskInput {
+            width: 600px; /* Triplicado horizontalmente (aproximadamente 3x o tamanho padrão) */
+        }
         button:hover {
             background: #555;
         }
@@ -84,7 +87,7 @@
         import { getDatabase, ref, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
-            apiKey: "AIzxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxJvk",
+            apiKey: "AIzaSyBiFPswIXLxgaHwxXlDX0ov4d0WYa6xJvk",
             authDomain: "tarefas-jpv.firebaseapp.com",
             projectId: "tarefas-jpv",
             storageBucket: "tarefas-jpv.firebasestorage.app",
@@ -105,12 +108,18 @@
                 const taskList = document.getElementById('taskList');
                 taskList.innerHTML = tasks ? '' : '<li>Sem tarefas ainda.</li>';
                 const taskArray = Object.entries(tasks).sort((a, b) => {
+                    // Primeiro, ordena por completed (false antes de true)
+                    if (a[1].completed !== b[1].completed) {
+                        return a[1].completed - b[1].completed;
+                    }
+                    // Depois, por data (crescente)
                     const dateA = a[1].dueDate || '9999-12-31';
                     const dateB = b[1].dueDate || '9999-12-31';
-                    if (dateA === dateB) {
-                        return b[1].priority - a[1].priority;
+                    if (dateA !== dateB) {
+                        return dateA.localeCompare(dateB);
                     }
-                    return dateA.localeCompare(dateB);
+                    // Por fim, por prioridade (decrescente)
+                    return b[1].priority - a[1].priority;
                 });
                 taskArray.forEach(([key, task]) => {
                     const li = createTaskElement(task, key);
