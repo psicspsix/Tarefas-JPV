@@ -24,7 +24,7 @@
             border: 1px solid #555;
         }
         #taskInput {
-            width: 600px; /* Triplicado horizontalmente (aproximadamente 3x o tamanho padrão) */
+            width: 600px;
         }
         button:hover {
             background: #555;
@@ -77,14 +77,14 @@
     <input type="text" id="taskInput" placeholder="Digite uma tarefa">
     <input type="date" id="dueDate" placeholder="Data de término (opcional)">
     <input type="number" id="priority" min="1" max="1000" placeholder="Prioridade (1-1000)">
-    <button onclick="addTask()">Adicionar</button>
+    <button id="actionButton" onclick="saveTask()">Adicionar</button>
     <div id="error"></div>
     <div id="success"></div>
     <ul id="taskList"></ul>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getDatabase, ref, onValue, push, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, onValue, push, update, remove, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBiFPswIXLxgaHwxXlDX0ov4d0WYa6xJvk",
@@ -103,22 +103,21 @@
             const tasksRef = ref(db, 'tasks');
             console.log("Firebase conectado com sucesso!");
 
+            let editingTaskKey = null; // Para rastrear qual tarefa está sendo editada
+
             onValue(tasksRef, (snapshot) => {
                 const tasks = snapshot.val() || {};
                 const taskList = document.getElementById('taskList');
                 taskList.innerHTML = tasks ? '' : '<li>Sem tarefas ainda.</li>';
                 const taskArray = Object.entries(tasks).sort((a, b) => {
-                    // Primeiro, ordena por completed (false antes de true)
                     if (a[1].completed !== b[1].completed) {
                         return a[1].completed - b[1].completed;
                     }
-                    // Depois, por data (crescente)
                     const dateA = a[1].dueDate || '9999-12-31';
                     const dateB = b[1].dueDate || '9999-12-31';
                     if (dateA !== dateB) {
                         return dateA.localeCompare(dateB);
                     }
-                    // Por fim, por prioridade (decrescente)
                     return b[1].priority - a[1].priority;
                 });
                 taskArray.forEach(([key, task]) => {
@@ -129,7 +128,7 @@
                 document.getElementById('error').textContent = "Erro ao carregar tarefas: " + error.message;
             });
 
-            window.addTask = function() {
+            window.saveTask = function() {
                 const taskInput = document.getElementById('taskInput');
                 const dueDateInput = document.getElementById('dueDate');
                 const priorityInput = document.getElementById('priority');
@@ -142,22 +141,65 @@
                     return;
                 }
 
-                push(tasksRef, {
-                    text: taskText,
-                    dueDate: dueDate,
-                    priority: Math.min(Math.max(priority, 1), 1000),
-                    notes: "",
-                    completed: false
-                }).then(() => {
-                    taskInput.value = '';
-                    dueDateInput.value = '';
-                    priorityInput.value = '';
-                    document.getElementById('error').textContent = '';
-                    document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
-                    setTimeout(() => document.getElementById('success').textContent = '', 2000);
-                }).catch((error) => {
-                    document.getElementById('error').textContent = "Erro ao adicionar: " + error.message;
-                });
+                const actionButton = document.getElementById('actionButton');
+                if (editingTaskKey) {
+                    // Atualiza tarefa existente
+                    const taskRef = ref(db, `tasks/${editingTaskKey}`);
+                    set(taskRef, {
+                        text: taskText,
+                        dueDate: dueDate,
+                        priority: Math.min(Math.max(priority, 1), 1000),
+                        notes: editingTaskKey.notes || "", // Mantém as notas existentes
+                        completed: editingTaskKey.completed || false
+                    }).then(() => {
+                        resetForm();
+                        document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
+                        setTimeout(() => document.getElementById('success').textContent = '', 2000);
+                    }).catch((error) => {
+                        document.getElementById('error').textContent = "Erro ao atualizar: " + error.message;
+                    });
+                } else {
+                    // Adiciona nova tarefa
+                    push(tasksRef, {
+                        text: taskText,
+                        dueDate: dueDate,
+                        priority: Math.min(Math.max(priority, 1), 1000),
+                        notes: "",
+                        completed: false
+                    }).then(() => {
+                        resetForm();
+                        document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
+                        setTimeout(() => document.getElementById('success').textContent = '', 2000);
+                    }).catch((error) => {
+                        document.getElementById('error').textContent = "Erro ao adicionar: " + error.message;
+                    });
+                }
+            };
+
+            function resetForm() {
+                const taskInput = document.getElementById('taskInput');
+                const dueDateInput = document.getElementById('dueDate');
+                const priorityInput = document.getElementById('priority');
+                const actionButton = document.getElementById('actionButton');
+                taskInput.value = '';
+                dueDateInput.value = '';
+                priorityInput.value = '';
+                actionButton.textContent = 'Adicionar';
+                document.getElementById('error').textContent = '';
+                editingTaskKey = null;
+            }
+
+            window.editTask = function(key, task) {
+                const taskInput = document.getElementById('taskInput');
+                const dueDateInput = document.getElementById('dueDate');
+                const priorityInput = document.getElementById('priority');
+                const actionButton = document.getElementById('actionButton');
+
+                taskInput.value = task.text;
+                dueDateInput.value = task.dueDate || '';
+                priorityInput.value = task.priority;
+                actionButton.textContent = 'Salvar';
+                editingTaskKey = { key: key, notes: task.notes, completed: task.completed }; // Armazena a chave e dados para atualização
             };
 
             window.toggleTask = function(key) {
@@ -195,6 +237,7 @@
                 li.innerHTML = `
                     <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTask('${key}')">
                     <span onclick="toggleNotes('${key}', this.parentElement)">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
+                    <button onclick="event.stopPropagation(); editTask('${key}', ${JSON.stringify(task)})">Editar</button>
                     <button onclick="event.stopPropagation(); deleteTask('${key}')">Excluir</button>
                     <div class="notes">
                         <textarea rows="3" onchange="updateNotes('${key}', this)" onclick="event.stopPropagation();">${task.notes || ''}</textarea>
