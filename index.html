@@ -103,7 +103,7 @@
             const tasksRef = ref(db, 'tasks');
             console.log("Firebase conectado com sucesso!");
 
-            let editingTaskKey = null; // Para rastrear qual tarefa está sendo editada
+            let editingTaskKey = null; // Para rastrear a tarefa em edição
 
             onValue(tasksRef, (snapshot) => {
                 const tasks = snapshot.val() || {};
@@ -145,109 +145,25 @@
                 if (editingTaskKey) {
                     // Atualiza tarefa existente
                     const taskRef = ref(db, `tasks/${editingTaskKey}`);
-                    set(taskRef, {
-                        text: taskText,
-                        dueDate: dueDate,
-                        priority: Math.min(Math.max(priority, 1), 1000),
-                        notes: editingTaskKey.notes || "", // Mantém as notas existentes
-                        completed: editingTaskKey.completed || false
-                    }).then(() => {
-                        resetForm();
-                        document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
-                        setTimeout(() => document.getElementById('success').textContent = '', 2000);
-                    }).catch((error) => {
-                        document.getElementById('error').textContent = "Erro ao atualizar: " + error.message;
-                    });
+                    onValue(taskRef, (snapshot) => {
+                        const currentTask = snapshot.val();
+                        set(taskRef, {
+                            text: taskText,
+                            dueDate: dueDate,
+                            priority: Math.min(Math.max(priority, 1), 1000),
+                            notes: currentTask.notes || "",
+                            completed: currentTask.completed || false
+                        }).then(() => {
+                            resetForm();
+                            document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
+                            setTimeout(() => document.getElementById('success').textContent = '', 2000);
+                        }).catch((error) => {
+                            document.getElementById('error').textContent = "Erro ao atualizar: " + error.message;
+                        });
+                    }, { onlyOnce: true });
                 } else {
                     // Adiciona nova tarefa
                     push(tasksRef, {
                         text: taskText,
                         dueDate: dueDate,
-                        priority: Math.min(Math.max(priority, 1), 1000),
-                        notes: "",
-                        completed: false
-                    }).then(() => {
-                        resetForm();
-                        document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
-                        setTimeout(() => document.getElementById('success').textContent = '', 2000);
-                    }).catch((error) => {
-                        document.getElementById('error').textContent = "Erro ao adicionar: " + error.message;
-                    });
-                }
-            };
-
-            function resetForm() {
-                const taskInput = document.getElementById('taskInput');
-                const dueDateInput = document.getElementById('dueDate');
-                const priorityInput = document.getElementById('priority');
-                const actionButton = document.getElementById('actionButton');
-                taskInput.value = '';
-                dueDateInput.value = '';
-                priorityInput.value = '';
-                actionButton.textContent = 'Adicionar';
-                document.getElementById('error').textContent = '';
-                editingTaskKey = null;
-            }
-
-            window.editTask = function(key, task) {
-                const taskInput = document.getElementById('taskInput');
-                const dueDateInput = document.getElementById('dueDate');
-                const priorityInput = document.getElementById('priority');
-                const actionButton = document.getElementById('actionButton');
-
-                taskInput.value = task.text;
-                dueDateInput.value = task.dueDate || '';
-                priorityInput.value = task.priority;
-                actionButton.textContent = 'Salvar';
-                editingTaskKey = { key: key, notes: task.notes, completed: task.completed }; // Armazena a chave e dados para atualização
-            };
-
-            window.toggleTask = function(key) {
-                const taskRef = ref(db, `tasks/${key}`);
-                onValue(taskRef, (snapshot) => {
-                    const task = snapshot.val();
-                    update(taskRef, { completed: !task.completed });
-                }, { onlyOnce: true });
-            };
-
-            window.deleteTask = function(key) {
-                const taskRef = ref(db, `tasks/${key}`);
-                remove(taskRef);
-            };
-
-            window.toggleNotes = function(key, li) {
-                const notesDiv = li.querySelector('.notes');
-                notesDiv.classList.toggle('visible');
-            };
-
-            window.updateNotes = function(key, textarea) {
-                const taskRef = ref(db, `tasks/${key}`);
-                update(taskRef, { notes: textarea.value });
-            };
-
-            function formatDate(dateStr) {
-                if (!dateStr) return 'Sem data';
-                const [year, month, day] = dateStr.split('-');
-                return `${day}/${month}/${year}`;
-            }
-
-            function createTaskElement(task, key) {
-                const li = document.createElement('li');
-                li.className = task.completed ? 'completed' : '';
-                li.innerHTML = `
-                    <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTask('${key}')">
-                    <span onclick="toggleNotes('${key}', this.parentElement)">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
-                    <button onclick="event.stopPropagation(); editTask('${key}', ${JSON.stringify(task)})">Editar</button>
-                    <button onclick="event.stopPropagation(); deleteTask('${key}')">Excluir</button>
-                    <div class="notes">
-                        <textarea rows="3" onchange="updateNotes('${key}', this)" onclick="event.stopPropagation();">${task.notes || ''}</textarea>
-                    </div>
-                `;
-                return li;
-            }
-        } catch (error) {
-            document.getElementById('error').textContent = "Erro ao conectar ao Firebase: " + error.message;
-        }
-    </script>
-</body>
-</html>
+                        priority: Math.min(Math.max(priority
