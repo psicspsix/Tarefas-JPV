@@ -166,11 +166,7 @@
 
             window.showNotes = function(key, li) {
                 const notesDiv = li.querySelector('.notes');
-                if (notesDiv.classList.contains('visible')) {
-                    notesDiv.classList.remove('visible');
-                } else {
-                    notesDiv.classList.add('visible');
-                }
+                notesDiv.classList.toggle('visible');
             };
 
             window.updateNotes = function(key, textarea) {
@@ -178,13 +174,23 @@
                 update(taskRef, { notes: textarea.value });
             };
 
+            function formatDate(dateStr) {
+                if (!dateStr) return 'Sem data';
+                const [year, month, day] = dateStr.split('-');
+                return `${day}/${month}/${year}`;
+            }
+
             function createTaskElement(task, key) {
                 const li = document.createElement('li');
                 li.className = task.completed ? 'completed' : '';
-                li.onclick = () => showNotes(key, li); // Clica na tarefa para mostrar notas
+                li.onclick = (event) => {
+                    if (event.target.tagName !== 'INPUT' && event.target.tagName !== 'BUTTON') {
+                        showNotes(key, li);
+                    }
+                };
                 li.innerHTML = `
                     <input type="checkbox" ${task.completed ? 'checked' : ''} onclick="event.stopPropagation(); toggleTask('${key}')">
-                    ${task.text} | Data: ${task.dueDate || 'Sem data'} | Prioridade: ${task.priority}
+                    ${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}
                     <button onclick="event.stopPropagation(); deleteTask('${key}')">Excluir</button>
                     <div class="notes">
                         <textarea rows="3" onchange="updateNotes('${key}', this)">${task.notes || ''}</textarea>
