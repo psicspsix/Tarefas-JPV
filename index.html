@@ -221,7 +221,7 @@
             today.setHours(0, 0, 0, 0);
             const due = new Date(dueDate);
             due.setHours(0, 0, 0, 0);
-            return today >= due;
+            return today.getTime() >= due.getTime();
         }
 
         // Renderiza as tarefas
@@ -273,7 +273,7 @@
                         e.stopPropagation();
                         toggleNotes(li);
                     });
-                }
+                };
                 li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
                 li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
                 taskList.appendChild(li);
