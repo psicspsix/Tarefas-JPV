@@ -75,8 +75,9 @@
             font-style: italic;
             cursor: pointer;
         }
-        .task-text.bold {
+        .task-text.bold-italic {
             font-weight: bold;
+            font-style: italic;
         }
     </style>
 </head>
@@ -242,10 +243,10 @@
             taskArray.forEach(([key, task]) => {
                 const li = document.createElement('li');
                 li.className = task.completed ? 'completed' : '';
-                const isTaskBold = isPastDue(task.dueDate, task.completed);
+                const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
                 li.innerHTML = `
                     <input type="checkbox" ${task.completed ? 'checked' : ''}>
-                    <span class="task-text ${isTaskBold ? 'bold' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
+                    <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                     <button class="edit-btn">Editar</button>
                     <button class="delete-btn">Excluir</button>
                     ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
