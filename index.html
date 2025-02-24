@@ -121,6 +121,9 @@
         .dropdown-content button:hover {
             background-color: #555;
         }
+        .date-today {
+            color: #1e90ff; /* Azul */
+        }
     </style>
 </head>
 <body>
@@ -281,9 +284,6 @@
                     category: newCategory
                 }).then(() => {
                     renderTasks(); // Atualiza a listagem
-                    document.querySelectorAll('.dropdown-content').forEach(content => {
-                        content.style.display = 'none'; // Fecha todos os dropdowns
-                    });
                 }).catch((error) => {
                     document.getElementById('error').textContent = "Erro ao alterar categoria: " + error.message;
                 });
@@ -293,7 +293,7 @@
         function formatDate(dateStr) {
             if (!dateStr) return 'Sem data';
             const [year, month, day] = dateStr.split('-');
-            return `${day}/${month}/${year}`;
+            return `<span class="${isToday(dateStr) ? 'date-today' : ''}">${day}/${month}/${year}</span>`;
         }
 
         function isPastDue(dueDate, completed) {
@@ -303,6 +303,15 @@
             const due = new Date(dueDate);
             due.setHours(0, 0, 0, 0);
             return today.getTime() >= due.getTime();
+        }
+
+        function isToday(dueDate) {
+            if (!dueDate) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const due = new Date(dueDate);
+            due.setHours(0, 0, 0, 0);
+            return today.getTime() === due.getTime();
         }
 
         // Função para mudar a categoria ativa
@@ -373,6 +382,10 @@
                             e.stopPropagation();
                             const newCategory = item.getAttribute('data-category');
                             changeCategory(key, newCategory);
+                            const dropdownContent = item.closest('.dropdown-content');
+                            if (dropdownContent) {
+                                dropdownContent.style.display = 'none'; // Fecha o dropdown específico
+                            }
                         });
                     });
                     li.querySelector('.edit-btn').addEventListener('click', (e) => {
