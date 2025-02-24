@@ -75,6 +75,9 @@
             font-style: italic;
             cursor: pointer;
         }
+        .task-text.bold {
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -214,7 +217,7 @@
         function isPastDue(dueDate, completed) {
             if (!dueDate || completed) return false;
             const today = new Date();
-            today.setHours(0, 0, 0, 0); // Zera a hora para comparar apenas a data
+            today.setHours(0, 0, 0, 0);
             const due = new Date(dueDate);
             due.setHours(0, 0, 0, 0);
             return today >= due;
@@ -239,15 +242,15 @@
             taskArray.forEach(([key, task]) => {
                 const li = document.createElement('li');
                 li.className = task.completed ? 'completed' : '';
-                const isNoteBold = isPastDue(task.dueDate, task.completed);
+                const isTaskBold = isPastDue(task.dueDate, task.completed);
                 li.innerHTML = `
                     <input type="checkbox" ${task.completed ? 'checked' : ''}>
-                    <span>${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
+                    <span class="task-text ${isTaskBold ? 'bold' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                     <button class="edit-btn">Editar</button>
                     <button class="delete-btn">Excluir</button>
                     ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
                     <div class="notes">
-                        <textarea rows="3">${isNoteBold ? `<strong>${task.notes || ''}</strong>` : task.notes || ''}</textarea>
+                        <textarea rows="3">${task.notes || ''}</textarea>
                     </div>
                 `;
                 li.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
