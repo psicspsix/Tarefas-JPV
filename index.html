@@ -11,9 +11,18 @@
             background: #1a1a1a;
             color: #e0e0e0;
         }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
         h1 {
-            text-align: center;
+            margin: 0;
             color: #ffffff;
+        }
+        .category-buttons {
+            display: flex;
+            gap: 10px;
         }
         input, button {
             font-size: 18px;
@@ -28,6 +37,10 @@
         }
         button:hover {
             background: #555;
+        }
+        button.active {
+            background: #555;
+            font-weight: bold;
         }
         ul {
             list-style-type: none;
@@ -82,7 +95,16 @@
     </style>
 </head>
 <body>
-    <h1>Minhas Tarefas</h1>
+    <div class="header">
+        <h1>Minhas Tarefas</h1>
+        <div class="category-buttons">
+            <button id="dailyBtn">Atividades Diárias</button>
+            <button id="workBtn">Trabalho</button>
+            <button id="leisureBtn">Lazer</button>
+            <button id="otherBtn">Outros</button>
+            <button id="allBtn">Todas</button>
+        </div>
+    </div>
     <input type="text" id="taskInput" placeholder="Digite uma tarefa">
     <input type="date" id="dueDate" placeholder="Data de término (opcional)">
     <input type="number" id="priority" min="1" max="1000" placeholder="Prioridade (1-1000)">
@@ -110,6 +132,7 @@
         const db = getDatabase(app);
         const tasksRef = ref(db, 'tasks');
         let editingTaskKey = null;
+        let currentCategory = 'daily'; // Padrão ao entrar
 
         console.log("Firebase conectado com sucesso!");
 
@@ -136,7 +159,8 @@
                         dueDate: dueDate,
                         priority: Math.min(Math.max(priority, 1), 1000),
                         notes: currentTask.notes || "",
-                        completed: currentTask.completed || false
+                        completed: currentTask.completed || false,
+                        category: currentCategory
                     }).then(() => {
                         resetForm();
                         document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
@@ -151,7 +175,8 @@
                     dueDate: dueDate,
                     priority: Math.min(Math.max(priority, 1), 1000),
                     notes: "",
-                    completed: false
+                    completed: false,
+                    category: currentCategory
                 }).then(() => {
                     resetForm();
                     document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
@@ -224,63 +249,86 @@
             return today.getTime() >= due.getTime();
         }
 
-        // Renderiza as tarefas
-        onValue(tasksRef, (snapshot) => {
-            const tasks = snapshot.val() || {};
-            const taskList = document.getElementById('taskList');
-            taskList.innerHTML = tasks ? '' : '<li>Sem tarefas ainda.</li>';
-            const taskArray = Object.entries(tasks).sort((a, b) => {
-                if (a[1].completed !== b[1].completed) {
-                    return a[1].completed - b[1].completed;
-                }
-                const dateA = a[1].dueDate || '9999-12-31';
-                const dateB = b[1].dueDate || '9999-12-31';
-                if (dateA !== dateB) {
-                    return dateA.localeCompare(dateB);
-                }
-                return b[1].priority - a[1].priority;
-            });
-            taskArray.forEach(([key, task]) => {
-                const li = document.createElement('li');
-                li.className = task.completed ? 'completed' : '';
-                const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
-                li.innerHTML = `
-                    <input type="checkbox" ${task.completed ? 'checked' : ''}>
-                    <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
-                    <button class="edit-btn">Editar</button>
-                    <button class="delete-btn">Excluir</button>
-                    ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
-                    <div class="notes">
-                        <textarea rows="3">${task.notes || ''}</textarea>
-                    </div>
-                `;
-                li.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    toggleTask(key);
-                });
-                li.querySelector('span').addEventListener('click', () => toggleNotes(li));
-                li.querySelector('.edit-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    editTask(key);
-                });
-                li.querySelector('.delete-btn').addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    deleteTask(key);
-                });
-                const notesIndicator = li.querySelector('.has-notes');
-                if (notesIndicator) {
-                    notesIndicator.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        toggleNotes(li);
+        // Função para mudar a categoria ativa
+        function setCategory(category) {
+            currentCategory = category;
+            const buttons = document.querySelectorAll('.category-buttons button');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`${category}Btn`).classList.add('active');
+            renderTasks();
+        }
+
+        // Renderiza as tarefas com base na categoria
+        function renderTasks() {
+            onValue(tasksRef, (snapshot) => {
+                const tasks = snapshot.val() || {};
+                const taskList = document.getElementById('taskList');
+                taskList.innerHTML = tasks ? '' : '<li>Sem tarefas ainda.</li>';
+                const taskArray = Object.entries(tasks)
+                    .filter(([_, task]) => currentCategory === 'all' || task.category === currentCategory)
+                    .sort((a, b) => {
+                        if (a[1].completed !== b[1].completed) {
+                            return a[1].completed - b[1].completed;
+                        }
+                        const dateA = a[1].dueDate || '9999-12-31';
+                        const dateB = b[1].dueDate || '9999-12-31';
+                        if (dateA !== dateB) {
+                            return dateA.localeCompare(dateB);
+                        }
+                        return b[1].priority - a[1].priority;
                     });
-                }
-                li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
-                li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
-                taskList.appendChild(li);
+                taskArray.forEach(([key, task]) => {
+                    const li = document.createElement('li');
+                    li.className = task.completed ? 'completed' : '';
+                    const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
+                    li.innerHTML = `
+                        <input type="checkbox" ${task.completed ? 'checked' : ''}>
+                        <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
+                        <button class="edit-btn">Editar</button>
+                        <button class="delete-btn">Excluir</button>
+                        ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
+                        <div class="notes">
+                            <textarea rows="3">${task.notes || ''}</textarea>
+                        </div>
+                    `;
+                    li.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleTask(key);
+                    });
+                    li.querySelector('span').addEventListener('click', () => toggleNotes(li));
+                    li.querySelector('.edit-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        editTask(key);
+                    });
+                    li.querySelector('.delete-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deleteTask(key);
+                    });
+                    const notesIndicator = li.querySelector('.has-notes');
+                    if (notesIndicator) {
+                        notesIndicator.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            toggleNotes(li);
+                        });
+                    }
+                    li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
+                    li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
+                    taskList.appendChild(li);
+                });
+            }, (error) => {
+                document.getElementById('error').textContent = "Erro ao carregar tarefas: " + error.message;
             });
-        }, (error) => {
-            document.getElementById('error').textContent = "Erro ao carregar tarefas: " + error.message;
-        });
+        }
+
+        // Inicializa com "Atividades Diárias"
+        setCategory('daily');
+
+        // Vincula eventos aos botões de categoria
+        document.getElementById('dailyBtn').addEventListener('click', () => setCategory('daily'));
+        document.getElementById('workBtn').addEventListener('click', () => setCategory('work'));
+        document.getElementById('leisureBtn').addEventListener('click', () => setCategory('leisure'));
+        document.getElementById('otherBtn').addEventListener('click', () => setCategory('other'));
+        document.getElementById('allBtn').addEventListener('click', () => setCategory('all'));
 
         // Vincula o evento ao botão de ação
         document.getElementById('actionButton').addEventListener('click', saveTask);
