@@ -122,7 +122,13 @@
             background-color: #555;
         }
         .date-today {
-            color: #1e90ff; /* Azul */
+            color: #1e90ff; /* Azul para o dia atual */
+        }
+        .date-one-day-past {
+            color: #ffff00; /* Amarelo para um dia anterior */
+        }
+        .date-two-plus-days-past {
+            color: #ff0000; /* Vermelho para dois dias ou mais anteriores */
         }
     </style>
 </head>
@@ -293,7 +299,15 @@
         function formatDate(dateStr) {
             if (!dateStr) return 'Sem data';
             const [year, month, day] = dateStr.split('-');
-            return `<span class="${isToday(dateStr) ? 'date-today' : ''}">${day}/${month}/${year}</span>`;
+            let className = '';
+            if (isToday(dateStr)) {
+                className = 'date-today';
+            } else if (isOneDayPast(dateStr)) {
+                className = 'date-one-day-past';
+            } else if (isTwoOrMoreDaysPast(dateStr)) {
+                className = 'date-two-plus-days-past';
+            }
+            return `<span class="${className}">${day}/${month}/${year}</span>`;
         }
 
         function isPastDue(dueDate, completed) {
@@ -312,6 +326,26 @@
             const due = new Date(dueDate);
             due.setHours(0, 0, 0, 0);
             return today.getTime() === due.getTime();
+        }
+
+        function isOneDayPast(dueDate) {
+            if (!dueDate) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const due = new Date(dueDate);
+            due.setHours(0, 0, 0, 0);
+            const oneDayInMs = 24 * 60 * 60 * 1000;
+            return today.getTime() - due.getTime() === oneDayInMs;
+        }
+
+        function isTwoOrMoreDaysPast(dueDate) {
+            if (!dueDate) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const due = new Date(dueDate);
+            due.setHours(0, 0, 0, 0);
+            const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
+            return today.getTime() - due.getTime() >= twoDaysInMs;
         }
 
         // Função para mudar a categoria ativa
