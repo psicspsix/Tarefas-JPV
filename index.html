@@ -70,6 +70,10 @@
             border: 1px solid #555;
             padding: 5px;
         }
+        .has-notes {
+            margin-left: 10px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -119,7 +123,6 @@
             }
 
             if (editingTaskKey) {
-                // Atualiza tarefa existente
                 const taskRef = ref(db, `tasks/${editingTaskKey}`);
                 onValue(taskRef, (snapshot) => {
                     const currentTask = snapshot.val();
@@ -138,7 +141,6 @@
                     });
                 }, { onlyOnce: true });
             } else {
-                // Adiciona nova tarefa
                 push(tasksRef, {
                     text: taskText,
                     dueDate: dueDate,
@@ -232,6 +234,7 @@
                     <span>${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                     <button class="edit-btn">Editar</button>
                     <button class="delete-btn">Excluir</button>
+                    ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">Contém Nota</span>' : ''}
                     <div class="notes">
                         <textarea rows="3">${task.notes || ''}</textarea>
                     </div>
