@@ -221,9 +221,7 @@
             today.setHours(0, 0, 0, 0);
             const due = new Date(dueDate);
             due.setHours(0, 0, 0, 0);
-            const isDue = today.getTime() >= due.getTime();
-            console.log(`Today: ${today.toISOString().split('T')[0]}, Due: ${due.toISOString().split('T')[0]}, Today >= Due: ${isDue}`);
-            return isDue;
+            return today.getTime() >= due.getTime();
         }
 
         // Renderiza as tarefas
