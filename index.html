@@ -24,7 +24,7 @@
             display: flex;
             gap: 10px;
         }
-        input, button {
+        input, button, select {
             font-size: 18px;
             padding: 10px;
             margin: 5px;
@@ -35,7 +35,7 @@
         #taskInput {
             width: 600px;
         }
-        button:hover {
+        button:hover, select:hover {
             background: #555;
         }
         button.active {
@@ -53,6 +53,9 @@
             padding: 10px;
             border-radius: 5px;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         .completed {
             text-decoration: line-through;
@@ -234,6 +237,26 @@
             update(taskRef, { notes: textarea.value });
         }
 
+        function changeCategory(key, select) {
+            const newCategory = select.value;
+            const taskRef = ref(db, `tasks/${key}`);
+            onValue(taskRef, (snapshot) => {
+                const task = snapshot.val();
+                set(taskRef, {
+                    text: task.text,
+                    dueDate: task.dueDate,
+                    priority: task.priority,
+                    notes: task.notes || "",
+                    completed: task.completed || false,
+                    category: newCategory
+                }).then(() => {
+                    renderTasks();
+                }).catch((error) => {
+                    document.getElementById('error').textContent = "Erro ao alterar categoria: " + error.message;
+                });
+            }, { onlyOnce: true });
+        }
+
         function formatDate(dateStr) {
             if (!dateStr) return 'Sem data';
             const [year, month, day] = dateStr.split('-');
@@ -284,6 +307,12 @@
                     li.innerHTML = `
                         <input type="checkbox" ${task.completed ? 'checked' : ''}>
                         <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
+                        <select class="category-select">
+                            <option value="daily" ${task.category === 'daily' ? 'selected' : ''}>Atividades Diárias</option>
+                            <option value="work" ${task.category === 'work' ? 'selected' : ''}>Trabalho</option>
+                            <option value="leisure" ${task.category === 'leisure' ? 'selected' : ''}>Lazer</option>
+                            <option value="other" ${task.category === 'other' ? 'selected' : ''}>Outros</option>
+                        </select>
                         <button class="edit-btn">Editar</button>
                         <button class="delete-btn">Excluir</button>
                         ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
@@ -296,6 +325,10 @@
                         toggleTask(key);
                     });
                     li.querySelector('span').addEventListener('click', () => toggleNotes(li));
+                    li.querySelector('.category-select').addEventListener('change', (e) => {
+                        e.stopPropagation();
+                        changeCategory(key, e.target);
+                    });
                     li.querySelector('.edit-btn').addEventListener('click', (e) => {
                         e.stopPropagation();
                         editTask(key);
