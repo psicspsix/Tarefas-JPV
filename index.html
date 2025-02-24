@@ -73,6 +73,7 @@
         .has-notes {
             margin-left: 10px;
             font-style: italic;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -234,7 +235,7 @@
                     <span>${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
                     <button class="edit-btn">Editar</button>
                     <button class="delete-btn">Excluir</button>
-                    ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">Contém Nota</span>' : ''}
+                    ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
                     <div class="notes">
                         <textarea rows="3">${task.notes || ''}</textarea>
                     </div>
@@ -252,6 +253,13 @@
                     e.stopPropagation();
                     deleteTask(key);
                 });
+                const notesIndicator = li.querySelector('.has-notes');
+                if (notesIndicator) {
+                    notesIndicator.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleNotes(li);
+                    });
+                }
                 li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
                 li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
                 taskList.appendChild(li);
