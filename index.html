@@ -24,7 +24,7 @@
             display: flex;
             gap: 10px;
         }
-        input, button, select {
+        input, button {
             font-size: 18px;
             padding: 10px;
             margin: 5px;
@@ -35,7 +35,7 @@
         #taskInput {
             width: 600px;
         }
-        button:hover, select:hover {
+        button:hover {
             background: #555;
         }
         button.active {
@@ -53,9 +53,30 @@
             padding: 10px;
             border-radius: 5px;
             cursor: pointer;
+        }
+        .task-row {
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+        .notes {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+            width: 100%;
+        }
+        .notes.visible {
+            display: block;
+        }
+        textarea {
+            width: 100%;
+            background: #444;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            padding: 5px;
+            box-sizing: border-box;
         }
         .completed {
             text-decoration: line-through;
@@ -69,23 +90,6 @@
             color: #55ff55;
             text-align: center;
         }
-        .notes {
-            display: none;
-            margin-top: 10px;
-            padding: 10px;
-            background: #333;
-            border-radius: 5px;
-        }
-        .notes.visible {
-            display: block;
-        }
-        textarea {
-            width: 100%;
-            background: #444;
-            color: #e0e0e0;
-            border: 1px solid #555;
-            padding: 5px;
-        }
         .has-notes {
             margin-left: 10px;
             font-style: italic;
@@ -94,6 +98,28 @@
         .task-text.bold-italic {
             font-weight: bold;
             font-style: italic;
+        }
+        .category-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #333;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 5px;
+        }
+        .dropdown-content button {
+            width: 100%;
+            text-align: left;
+            padding: 10px;
+            margin: 0;
+        }
+        .dropdown-content button:hover {
+            background-color: #555;
         }
     </style>
 </head>
@@ -237,8 +263,12 @@
             update(taskRef, { notes: textarea.value });
         }
 
-        function changeCategory(key, select) {
-            const newCategory = select.value;
+        function toggleCategoryDropdown(dropdown) {
+            const content = dropdown.querySelector('.dropdown-content');
+            content.style.display = content.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function changeCategory(key, newCategory) {
             const taskRef = ref(db, `tasks/${key}`);
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
@@ -250,7 +280,7 @@
                     completed: task.completed || false,
                     category: newCategory
                 }).then(() => {
-                    renderTasks();
+                    renderTasks(); // Atualiza a listagem após alterar a categoria
                 }).catch((error) => {
                     document.getElementById('error').textContent = "Erro ao alterar categoria: " + error.message;
                 });
@@ -305,17 +335,22 @@
                     li.className = task.completed ? 'completed' : '';
                     const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
                     li.innerHTML = `
-                        <input type="checkbox" ${task.completed ? 'checked' : ''}>
-                        <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
-                        <select class="category-select">
-                            <option value="daily" ${task.category === 'daily' ? 'selected' : ''}>Atividades Diárias</option>
-                            <option value="work" ${task.category === 'work' ? 'selected' : ''}>Trabalho</option>
-                            <option value="leisure" ${task.category === 'leisure' ? 'selected' : ''}>Lazer</option>
-                            <option value="other" ${task.category === 'other' ? 'selected' : ''}>Outros</option>
-                        </select>
-                        <button class="edit-btn">Editar</button>
-                        <button class="delete-btn">Excluir</button>
-                        ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
+                        <div class="task-row">
+                            <input type="checkbox" ${task.completed ? 'checked' : ''}>
+                            <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
+                            <div class="category-dropdown">
+                                <button class="category-btn">Categoria</button>
+                                <div class="dropdown-content">
+                                    <button onclick="changeCategory('${key}', 'daily')">Atividades Diárias</button>
+                                    <button onclick="changeCategory('${key}', 'work')">Trabalho</button>
+                                    <button onclick="changeCategory('${key}', 'leisure')">Lazer</button>
+                                    <button onclick="changeCategory('${key}', 'other')">Outros</button>
+                                </div>
+                            </div>
+                            <button class="edit-btn">Editar</button>
+                            <button class="delete-btn">Excluir</button>
+                            ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
+                        </div>
                         <div class="notes">
                             <textarea rows="3">${task.notes || ''}</textarea>
                         </div>
@@ -324,10 +359,14 @@
                         e.stopPropagation();
                         toggleTask(key);
                     });
-                    li.querySelector('span').addEventListener('click', () => toggleNotes(li));
-                    li.querySelector('.category-select').addEventListener('change', (e) => {
+                    li.querySelector('.task-text').addEventListener('click', () => toggleNotes(li));
+                    const categoryBtn = li.querySelector('.category-btn');
+                    categoryBtn.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        changeCategory(key, e.target);
+                        toggleCategoryDropdown(categoryBtn.parentElement);
+                    });
+                    li.querySelectorAll('.dropdown-content button').forEach(btn => {
+                        btn.addEventListener('click', (e) => e.stopPropagation());
                     });
                     li.querySelector('.edit-btn').addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -347,6 +386,14 @@
                     li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
                     li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
                     taskList.appendChild(li);
+                });
+                // Fecha dropdowns ao clicar fora
+                document.addEventListener('click', (e) => {
+                    document.querySelectorAll('.dropdown-content').forEach(content => {
+                        if (!e.target.closest('.category-dropdown')) {
+                            content.style.display = 'none';
+                        }
+                    });
                 });
             }, (error) => {
                 document.getElementById('error').textContent = "Erro ao carregar tarefas: " + error.message;
