@@ -277,23 +277,18 @@
             content.style.display = content.style.display === 'block' ? 'none' : 'block';
         }
 
+        // Função corrigida para mudar a categoria
         function changeCategory(key, newCategory) {
             const taskRef = ref(db, `tasks/${key}`);
-            onValue(taskRef, (snapshot) => {
-                const task = snapshot.val();
-                set(taskRef, {
-                    text: task.text,
-                    dueDate: task.dueDate,
-                    priority: task.priority,
-                    notes: task.notes || "",
-                    completed: task.completed || false,
-                    category: newCategory
-                }).then(() => {
-                    renderTasks(); // Atualiza a listagem
-                }).catch((error) => {
+            update(taskRef, { category: newCategory }) // Atualiza apenas o campo category
+                .then(() => {
+                    console.log(`Categoria da tarefa ${key} alterada para ${newCategory}`);
+                    renderTasks(); // Re-renderiza a lista
+                })
+                .catch((error) => {
+                    console.error("Erro ao alterar categoria:", error);
                     document.getElementById('error').textContent = "Erro ao alterar categoria: " + error.message;
                 });
-            }, { onlyOnce: true });
         }
 
         function formatDate(dateStr) {
