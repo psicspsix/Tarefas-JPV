@@ -170,9 +170,23 @@
         const db = getDatabase(app);
         const tasksRef = ref(db, 'tasks');
         let editingTaskKey = null;
-        let currentCategory = 'daily'; // Padrão ao entrar
+        let currentCategory = 'daily';
+        let targetTaskKey = null;
 
         console.log("Firebase conectado com sucesso!");
+
+        // Função para rolar até a tarefa
+        function scrollToTarget(key) {
+            console.log(`Tentando rolar para: ${key}`);
+            const element = document.querySelector(`li[data-key="${key}"]`);
+            if (element) {
+                console.log(`Elemento encontrado: ${key}`);
+                document.getElementById('success').textContent = '';
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                console.log(`Elemento NÃO encontrado: ${key}`);
+            }
+        }
 
         // Função para salvar ou atualizar tarefa
         function saveTask() {
@@ -192,17 +206,24 @@
                 const taskRef = ref(db, `tasks/${editingTaskKey}`);
                 onValue(taskRef, (snapshot) => {
                     const currentTask = snapshot.val();
-                    set(taskRef, {
+                    const updatedTask = {
                         text: taskText,
                         dueDate: dueDate,
                         priority: Math.min(Math.max(priority, 1), 1000),
                         notes: currentTask.notes || "",
                         completed: currentTask.completed || false,
                         category: currentCategory
-                    }).then(() => {
+                    };
+                    set(taskRef, updatedTask).then(() => {
+                        const scrollKey = targetTaskKey; // Preserva a chave antes do reset
                         resetForm();
                         document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
-                        setTimeout(() => document.getElementById('success').textContent = '', 2000);
+                        console.log(`Tarefa editada, usando targetTaskKey: ${scrollKey}`);
+                        onValue(tasksRef, (snapshot) => {
+                            if (scrollKey) {
+                                scrollToTarget(scrollKey);
+                            }
+                        }, { onlyOnce: true });
                     }).catch((error) => {
                         document.getElementById('error').textContent = "Erro ao atualizar: " + error.message;
                     });
@@ -215,10 +236,10 @@
                     notes: "",
                     completed: false,
                     category: currentCategory
-                }).then(() => {
+                }).then((newTaskRef) => {
                     resetForm();
                     document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
-                    setTimeout(() => document.getElementById('success').textContent = '', 2000);
+                    scrollToTarget(newTaskRef.key);
                 }).catch((error) => {
                     document.getElementById('error').textContent = "Erro ao adicionar: " + error.message;
                 });
@@ -233,11 +254,14 @@
             document.getElementById('actionButton').textContent = 'Adicionar';
             document.getElementById('error').textContent = '';
             editingTaskKey = null;
+            targetTaskKey = null;
         }
 
         // Função para editar tarefa
         function editTask(key) {
             const taskRef = ref(db, `tasks/${key}`);
+            targetTaskKey = key;
+            console.log(`Editando tarefa, targetTaskKey: ${targetTaskKey}`);
             onValue(taskRef, (snapshot) => {
                 const task = snapshot.val();
                 document.getElementById('taskInput').value = task.text;
@@ -245,6 +269,8 @@
                 document.getElementById('priority').value = task.priority;
                 document.getElementById('actionButton').textContent = 'Salvar';
                 editingTaskKey = key;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setTimeout(() => document.getElementById('taskInput').focus(), 300);
             }, { onlyOnce: true });
         }
 
@@ -277,13 +303,12 @@
             content.style.display = content.style.display === 'block' ? 'none' : 'block';
         }
 
-        // Função corrigida para mudar a categoria
         function changeCategory(key, newCategory) {
             const taskRef = ref(db, `tasks/${key}`);
-            update(taskRef, { category: newCategory }) // Atualiza apenas o campo category
+            update(taskRef, { category: newCategory })
                 .then(() => {
                     console.log(`Categoria da tarefa ${key} alterada para ${newCategory}`);
-                    renderTasks(); // Re-renderiza a lista
+                    renderTasks();
                 })
                 .catch((error) => {
                     console.error("Erro ao alterar categoria:", error);
@@ -343,7 +368,6 @@
             return today.getTime() - due.getTime() >= twoDaysInMs;
         }
 
-        // Função para mudar a categoria ativa
         function setCategory(category) {
             currentCategory = category;
             const buttons = document.querySelectorAll('.category-buttons button');
@@ -352,7 +376,6 @@
             renderTasks();
         }
 
-        // Renderiza as tarefas com base na categoria
         function renderTasks() {
             onValue(tasksRef, (snapshot) => {
                 const tasks = snapshot.val() || {};
@@ -373,6 +396,7 @@
                     });
                 taskArray.forEach(([key, task]) => {
                     const li = document.createElement('li');
+                    li.setAttribute('data-key', key); // Adiciona data-key para rolagem
                     li.className = task.completed ? 'completed' : '';
                     const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
                     li.innerHTML = `
@@ -413,7 +437,7 @@
                             changeCategory(key, newCategory);
                             const dropdownContent = item.closest('.dropdown-content');
                             if (dropdownContent) {
-                                dropdownContent.style.display = 'none'; // Fecha o dropdown específico
+                                dropdownContent.style.display = 'none';
                             }
                         });
                     });
@@ -436,7 +460,6 @@
                     li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
                     taskList.appendChild(li);
                 });
-                // Fecha dropdowns ao clicar fora
                 document.addEventListener('click', (e) => {
                     if (!e.target.closest('.category-dropdown')) {
                         document.querySelectorAll('.dropdown-content').forEach(content => {
@@ -449,19 +472,35 @@
             });
         }
 
-        // Inicializa com "Atividades Diárias"
         setCategory('daily');
 
-        // Vincula eventos aos botões de categoria
         document.getElementById('dailyBtn').addEventListener('click', () => setCategory('daily'));
         document.getElementById('workBtn').addEventListener('click', () => setCategory('work'));
         document.getElementById('leisureBtn').addEventListener('click', () => setCategory('leisure'));
         document.getElementById('otherBtn').addEventListener('click', () => setCategory('other'));
         document.getElementById('allBtn').addEventListener('click', () => setCategory('all'));
 
-        // Vincula o evento ao botão de ação
         document.getElementById('actionButton').addEventListener('click', saveTask);
 
+        // Adiciona suporte ao "Enter" nos campos
+        document.getElementById('taskInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveTask();
+            }
+        });
+        document.getElementById('dueDate').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveTask();
+            }
+        });
+        document.getElementById('priority').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveTask();
+            }
+        });
     </script>
 </body>
 </html>
