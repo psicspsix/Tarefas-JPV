@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciador de Tarefas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h1 {
+            margin: 0;
+            color: #ffffff;
+        }
+        .category-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        input, button {
+            font-size: 18px;
+            padding: 10px;
+            margin: 5px;
+            background: #333;
+            color: #e0e0e0;
+            border: 1px solid #555;
+        }
+        #taskInput {
+            width: 600px;
+        }
+        button:hover {
+            background: #555;
+        }
+        button.active {
+            background: #555;
+            font-weight: bold;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        li {
+            font-size: 18px;
+            margin: 10px 0;
+            background: #2a2a2a;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .task-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .notes {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+            width: 100%;
+        }
+        .notes.visible {
+            display: block;
+        }
+        textarea {
+            width: 100%;
+            background: #444;
+            color: #e0e0e0;
+            border: 1px solid #555;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+        .completed {
+            text-decoration: line-through;
+            color: #888;
+        }
+        #error {
+            color: #ff5555;
+            text-align: center;
+        }
+        #success {
+            color: #55ff55;
+            text-align: center;
+        }
+        .has-notes {
+            margin-left: 10px;
+            font-style: italic;
+            cursor: pointer;
+        }
+        .task-text.bold-italic {
+            font-weight: bold;
+            font-style: italic;
+        }
+        .category-dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            background-color: #333;
+            min-width: 160px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            border-radius: 5px;
+        }
+        .dropdown-content button {
+            width: 100%;
+            text-align: left;
+            padding: 10px;
+            margin: 0;
+        }
+        .dropdown-content button:hover {
+            background-color: #555;
+        }
+        .date-today {
+            color: #1e90ff; /* Azul para o dia atual */
+        }
+        .date-one-day-past {
+            color: #ffff00; /* Amarelo para um dia anterior */
+        }
+        .date-two-plus-days-past {
+            color: #ff0000; /* Vermelho para dois dias ou mais anteriores */
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Minhas Tarefas</h1>
+        <div class="category-buttons">
+            <button id="dailyBtn">Atividades Diárias</button>
+            <button id="workBtn">Trabalho</button>
+            <button id="leisureBtn">Lazer</button>
+            <button id="otherBtn">Outros</button>
+            <button id="allBtn">Todas</button>
+        </div>
+    </div>
+    <input type="text" id="taskInput" placeholder="Digite uma tarefa">
+    <input type="date" id="dueDate" placeholder="Data de término (opcional)">
+    <input type="number" id="priority" min="1" max="1000" placeholder="Prioridade (1-1000)">
+    <button id="actionButton">Adicionar</button>
+    <div id="error"></div>
+    <div id="success"></div>
+    <ul id="taskList"></ul>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, onValue, push, update, remove, set } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBiFPswIXLxgaHwxXlDX0ov4d0WYa6xJvk",
+            authDomain: "tarefas-jpv.firebaseapp.com",
+            projectId: "tarefas-jpv",
+            storageBucket: "tarefas-jpv.firebasestorage.app",
+            messagingSenderId: "641273600681",
+            appId: "1:641273600681:web:2873afa0828d9332a9e7b8",
+            measurementId: "G-X3ZS96CKF2",
+            databaseURL: "https://tarefas-jpv-default-rtdb.firebaseio.com"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const tasksRef = ref(db, 'tasks');
+        let editingTaskKey = null;
+        let currentCategory = 'daily';
+        let targetTaskKey = null;
+
+        console.log("Firebase conectado com sucesso!");
+
+        // Função para rolar até a tarefa
+        function scrollToTarget(key) {
+            console.log(`Tentando rolar para: ${key}`);
+            const element = document.querySelector(`li[data-key="${key}"]`);
+            if (element) {
+                console.log(`Elemento encontrado: ${key}`);
+                document.getElementById('success').textContent = '';
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                console.log(`Elemento NÃO encontrado: ${key}`);
+            }
+        }
+
+        // Função para salvar ou atualizar tarefa
+        function saveTask() {
+            const taskInput = document.getElementById('taskInput');
+            const dueDateInput = document.getElementById('dueDate');
+            const priorityInput = document.getElementById('priority');
+            const taskText = taskInput.value.trim();
+            let dueDate = dueDateInput.value || null;
+            const priority = parseInt(priorityInput.value) || 1;
+
+            if (taskText === '') {
+                document.getElementById('error').textContent = "Preencha a tarefa!";
+                return;
+            }
+
+            if (editingTaskKey) {
+                const taskRef = ref(db, `tasks/${editingTaskKey}`);
+                onValue(taskRef, (snapshot) => {
+                    const currentTask = snapshot.val();
+                    const updatedTask = {
+                        text: taskText,
+                        dueDate: dueDate,
+                        priority: Math.min(Math.max(priority, 1), 1000),
+                        notes: currentTask.notes || "",
+                        completed: currentTask.completed || false,
+                        category: currentCategory
+                    };
+                    set(taskRef, updatedTask).then(() => {
+                        const scrollKey = targetTaskKey; // Preserva a chave antes do reset
+                        resetForm();
+                        document.getElementById('success').textContent = "Tarefa atualizada com sucesso!";
+                        console.log(`Tarefa editada, usando targetTaskKey: ${scrollKey}`);
+                        onValue(tasksRef, (snapshot) => {
+                            if (scrollKey) {
+                                scrollToTarget(scrollKey);
+                            }
+                        }, { onlyOnce: true });
+                    }).catch((error) => {
+                        document.getElementById('error').textContent = "Erro ao atualizar: " + error.message;
+                    });
+                }, { onlyOnce: true });
+            } else {
+                push(tasksRef, {
+                    text: taskText,
+                    dueDate: dueDate,
+                    priority: Math.min(Math.max(priority, 1), 1000),
+                    notes: "",
+                    completed: false,
+                    category: currentCategory
+                }).then((newTaskRef) => {
+                    resetForm();
+                    document.getElementById('success').textContent = "Tarefa adicionada com sucesso!";
+                    scrollToTarget(newTaskRef.key);
+                }).catch((error) => {
+                    document.getElementById('error').textContent = "Erro ao adicionar: " + error.message;
+                });
+            }
+        }
+
+        // Função para resetar o formulário
+        function resetForm() {
+            document.getElementById('taskInput').value = '';
+            document.getElementById('dueDate').value = '';
+            document.getElementById('priority').value = '';
+            document.getElementById('actionButton').textContent = 'Adicionar';
+            document.getElementById('error').textContent = '';
+            editingTaskKey = null;
+            targetTaskKey = null;
+        }
+
+        // Função para editar tarefa
+        function editTask(key) {
+            const taskRef = ref(db, `tasks/${key}`);
+            targetTaskKey = key;
+            console.log(`Editando tarefa, targetTaskKey: ${targetTaskKey}`);
+            onValue(taskRef, (snapshot) => {
+                const task = snapshot.val();
+                document.getElementById('taskInput').value = task.text;
+                document.getElementById('dueDate').value = task.dueDate || '';
+                document.getElementById('priority').value = task.priority;
+                document.getElementById('actionButton').textContent = 'Salvar';
+                editingTaskKey = key;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                setTimeout(() => document.getElementById('taskInput').focus(), 300);
+            }, { onlyOnce: true });
+        }
+
+        // Funções auxiliares
+        function toggleTask(key) {
+            const taskRef = ref(db, `tasks/${key}`);
+            onValue(taskRef, (snapshot) => {
+                const task = snapshot.val();
+                update(taskRef, { completed: !task.completed });
+            }, { onlyOnce: true });
+        }
+
+        function deleteTask(key) {
+            const taskRef = ref(db, `tasks/${key}`);
+            remove(taskRef);
+        }
+
+        function toggleNotes(li) {
+            const notesDiv = li.querySelector('.notes');
+            notesDiv.classList.toggle('visible');
+        }
+
+        function updateNotes(key, textarea) {
+            const taskRef = ref(db, `tasks/${key}`);
+            update(taskRef, { notes: textarea.value });
+        }
+
+        function toggleCategoryDropdown(dropdown) {
+            const content = dropdown.querySelector('.dropdown-content');
+            content.style.display = content.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function changeCategory(key, newCategory) {
+            const taskRef = ref(db, `tasks/${key}`);
+            update(taskRef, { category: newCategory })
+                .then(() => {
+                    console.log(`Categoria da tarefa ${key} alterada para ${newCategory}`);
+                    renderTasks();
+                })
+                .catch((error) => {
+                    console.error("Erro ao alterar categoria:", error);
+                    document.getElementById('error').textContent = "Erro ao alterar categoria: " + error.message;
+                });
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Sem data';
+            const [year, month, day] = dateStr.split('-');
+            let className = '';
+            if (isToday(dateStr)) {
+                className = 'date-today';
+            } else if (isOneDayPast(dateStr)) {
+                className = 'date-one-day-past';
+            } else if (isTwoOrMoreDaysPast(dateStr)) {
+                className = 'date-two-plus-days-past';
+            }
+            return `<span class="${className}">${day}/${month}/${year}</span>`;
+        }
+
+        function isPastDue(dueDate, completed) {
+            if (!dueDate || completed) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const due = new Date(dueDate);
+            due.setHours(0, 0, 0, 0);
+            return today.getTime() >= due.getTime();
+        }
+
+        function isToday(dueDate) {
+            if (!dueDate) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const due = new Date(dueDate);
+            due.setHours(0, 0, 0, 0);
+            return today.getTime() === due.getTime();
+        }
+
+        function isOneDayPast(dueDate) {
+            if (!dueDate) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const due = new Date(dueDate);
+            due.setHours(0, 0, 0, 0);
+            const oneDayInMs = 24 * 60 * 60 * 1000;
+            return today.getTime() - due.getTime() === oneDayInMs;
+        }
+
+        function isTwoOrMoreDaysPast(dueDate) {
+            if (!dueDate) return false;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const due = new Date(dueDate);
+            due.setHours(0, 0, 0, 0);
+            const twoDaysInMs = 2 * 24 * 60 * 60 * 1000;
+            return today.getTime() - due.getTime() >= twoDaysInMs;
+        }
+
+        function setCategory(category) {
+            currentCategory = category;
+            const buttons = document.querySelectorAll('.category-buttons button');
+            buttons.forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`${category}Btn`).classList.add('active');
+            renderTasks();
+        }
+
+        function renderTasks() {
+            onValue(tasksRef, (snapshot) => {
+                const tasks = snapshot.val() || {};
+                const taskList = document.getElementById('taskList');
+                taskList.innerHTML = tasks ? '' : '<li>Sem tarefas ainda.</li>';
+                const taskArray = Object.entries(tasks)
+                    .filter(([_, task]) => currentCategory === 'all' || task.category === currentCategory)
+                    .sort((a, b) => {
+                        if (a[1].completed !== b[1].completed) {
+                            return a[1].completed - b[1].completed;
+                        }
+                        const dateA = a[1].dueDate || '9999-12-31';
+                        const dateB = b[1].dueDate || '9999-12-31';
+                        if (dateA !== dateB) {
+                            return dateA.localeCompare(dateB);
+                        }
+                        return b[1].priority - a[1].priority;
+                    });
+                taskArray.forEach(([key, task]) => {
+                    const li = document.createElement('li');
+                    li.setAttribute('data-key', key); // Adiciona data-key para rolagem
+                    li.className = task.completed ? 'completed' : '';
+                    const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
+                    li.innerHTML = `
+                        <div class="task-row">
+                            <input type="checkbox" ${task.completed ? 'checked' : ''}>
+                            <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
+                            <div class="category-dropdown">
+                                <button class="category-btn">Categoria</button>
+                                <div class="dropdown-content">
+                                    <button class="dropdown-item" data-category="daily">Atividades Diárias</button>
+                                    <button class="dropdown-item" data-category="work">Trabalho</button>
+                                    <button class="dropdown-item" data-category="leisure">Lazer</button>
+                                    <button class="dropdown-item" data-category="other">Outros</button>
+                                </div>
+                            </div>
+                            <button class="edit-btn">Editar</button>
+                            <button class="delete-btn">Excluir</button>
+                            ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
+                        </div>
+                        <div class="notes">
+                            <textarea rows="3">${task.notes || ''}</textarea>
+                        </div>
+                    `;
+                    li.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleTask(key);
+                    });
+                    li.querySelector('.task-text').addEventListener('click', () => toggleNotes(li));
+                    const categoryBtn = li.querySelector('.category-btn');
+                    categoryBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        toggleCategoryDropdown(categoryBtn.parentElement);
+                    });
+                    li.querySelectorAll('.dropdown-item').forEach(item => {
+                        item.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const newCategory = item.getAttribute('data-category');
+                            changeCategory(key, newCategory);
+                            const dropdownContent = item.closest('.dropdown-content');
+                            if (dropdownContent) {
+                                dropdownContent.style.display = 'none';
+                            }
+                        });
+                    });
+                    li.querySelector('.edit-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        editTask(key);
+                    });
+                    li.querySelector('.delete-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deleteTask(key);
+                    });
+                    const notesIndicator = li.querySelector('.has-notes');
+                    if (notesIndicator) {
+                        notesIndicator.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            toggleNotes(li);
+                        });
+                    }
+                    li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
+                    li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
+                    taskList.appendChild(li);
+                });
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.category-dropdown')) {
+                        document.querySelectorAll('.dropdown-content').forEach(content => {
+                            content.style.display = 'none';
+                        });
+                    }
+                });
+            }, (error) => {
+                document.getElementById('error').textContent = "Erro ao carregar tarefas: " + error.message;
+            });
+        }
+
+        setCategory('daily');
+
+        document.getElementById('dailyBtn').addEventListener('click', () => setCategory('daily'));
+        document.getElementById('workBtn').addEventListener('click', () => setCategory('work'));
+        document.getElementById('leisureBtn').addEventListener('click', () => setCategory('leisure'));
+        document.getElementById('otherBtn').addEventListener('click', () => setCategory('other'));
+        document.getElementById('allBtn').addEventListener('click', () => setCategory('all'));
+
+        document.getElementById('actionButton').addEventListener('click', saveTask);
+
+        // Adiciona suporte ao "Enter" nos campos
+        document.getElementById('taskInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveTask();
+            }
+        });
+        document.getElementById('dueDate').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveTask();
+            }
+        });
+        document.getElementById('priority').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveTask();
+            }
+        });
+    </script>
+</body>
+</html>
