@@ -24,6 +24,12 @@
             display: flex;
             gap: 10px;
         }
+        .input-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
         input, button {
             font-size: 18px;
             padding: 10px;
@@ -41,6 +47,14 @@
         button.active {
             background: #555;
             font-weight: bold;
+        }
+        .small-btn {
+            font-size: 14px;
+            padding: 5px;
+            width: 30px;
+            height: 30px;
+            line-height: 20px;
+            text-align: center;
         }
         ul {
             list-style-type: none;
@@ -77,6 +91,16 @@
             border: 1px solid #555;
             padding: 5px;
             box-sizing: border-box;
+        }
+        #txtNote {
+            display: none;
+            margin: 10px 0;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+            width: 100%;
+            min-height: 100px;
+            resize: vertical;
         }
         .completed {
             text-decoration: line-through;
@@ -130,6 +154,9 @@
         .date-two-plus-days-past {
             color: #ff0000; /* Vermelho para dois dias ou mais anteriores */
         }
+        #backBtn {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -143,10 +170,16 @@
             <button id="allBtn">Todas</button>
         </div>
     </div>
-    <input type="text" id="taskInput" placeholder="Digite uma tarefa">
-    <input type="date" id="dueDate" placeholder="Data de término (opcional)">
-    <input type="number" id="priority" min="1" max="1000" placeholder="Prioridade (1-1000)">
-    <button id="actionButton">Adicionar</button>
+    <div class="input-row">
+        <input type="text" id="taskInput" placeholder="Digite à tarefa ou os termos para pesquisa!">
+        <input type="date" id="dueDate" placeholder="Data de término (opcional)">
+        <input type="number" id="priority" min="1" max="1000" placeholder="Prioridade (1-1000)">
+        <button id="actionButton">Adicionar</button>
+        <button id="txtBtn" class="small-btn">TXT</button>
+        <button id="searchBtn" class="small-btn">🔍</button>
+        <button id="backBtn">Voltar</button>
+    </div>
+    <textarea id="txtNote" placeholder="Tarefas ativas serão exibidas aqui ao clicar em TXT"></textarea>
     <div id="error"></div>
     <div id="success"></div>
     <ul id="taskList"></ul>
@@ -253,8 +286,11 @@
             document.getElementById('priority').value = '';
             document.getElementById('actionButton').textContent = 'Adicionar';
             document.getElementById('error').textContent = '';
+            document.getElementById('txtNote').style.display = 'none';
+            document.getElementById('backBtn').style.display = 'none';
             editingTaskKey = null;
             targetTaskKey = null;
+            renderTasks();
         }
 
         // Função para editar tarefa
@@ -271,6 +307,74 @@
                 editingTaskKey = key;
                 window.scrollTo({ top: 0, behavior: 'smooth' });
                 setTimeout(() => document.getElementById('taskInput').focus(), 300);
+            }, { onlyOnce: true });
+        }
+
+        // Função para pesquisar tarefas
+        function searchTasks() {
+            const searchText = document.getElementById('taskInput').value.trim().toLowerCase();
+            if (!searchText) {
+                document.getElementById('error').textContent = "Digite um termo para pesquisar!";
+                console.log("Erro: Texto de pesquisa vazio");
+                return;
+            }
+
+            console.log(`Pesquisando por: "${searchText}"`);
+            onValue(tasksRef, (snapshot) => {
+                const tasks = snapshot.val();
+                const taskList = document.getElementById('taskList');
+                taskList.innerHTML = '';
+                let found = false;
+
+                if (tasks) {
+                    Object.entries(tasks).forEach(([key, task]) => {
+                        const taskText = task.text.toLowerCase();
+                        const notesText = (task.notes || '').toLowerCase();
+                        if (taskText.includes(searchText) || notesText.includes(searchText)) {
+                            renderTask(key, task);
+                            found = true;
+                        }
+                    });
+                }
+
+                if (!found) {
+                    taskList.innerHTML = '<li>Nenhuma tarefa encontrada.</li>';
+                    console.log("Nenhuma correspondência encontrada na pesquisa");
+                } else {
+                    document.getElementById('success').textContent = "Resultados da pesquisa exibidos!";
+                    document.getElementById('backBtn').style.display = 'inline-block';
+                    console.log("Resultados da pesquisa renderizados com sucesso");
+                }
+            }, { onlyOnce: true });
+        }
+
+        // Função para exportar tarefas ativas para TXT
+        function exportToTxt() {
+            onValue(tasksRef, (snapshot) => {
+                const tasks = snapshot.val();
+                let txtContent = '';
+                if (tasks) {
+                    Object.values(tasks)
+                        .filter(task => !task.completed && (currentCategory === 'all' || task.category === currentCategory))
+                        .sort((a, b) => {
+                            const dateA = a.dueDate || '9999-12-31';
+                            const dateB = b.dueDate || '9999-12-31';
+                            if (dateA !== dateB) return dateA.localeCompare(dateB);
+                            return b.priority - a.priority;
+                        })
+                        .forEach(task => {
+                            txtContent += `${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}\n`;
+                            if (task.notes && task.notes.trim() !== '') {
+                                txtContent += `  Notas: ${task.notes}\n`;
+                            }
+                        });
+                }
+
+                const txtArea = document.getElementById('txtNote');
+                txtArea.value = txtContent || 'Nenhuma tarefa ativa para exibir.';
+                txtArea.style.display = 'block';
+                txtArea.focus();
+                txtArea.select();
             }, { onlyOnce: true });
         }
 
@@ -376,6 +480,74 @@
             renderTasks();
         }
 
+        function renderTask(key, task) {
+            const taskList = document.getElementById('taskList');
+            const li = document.createElement('li');
+            li.setAttribute('data-key', key);
+            li.className = task.completed ? 'completed' : '';
+            const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
+            li.innerHTML = `
+                <div class="task-row">
+                    <input type="checkbox" ${task.completed ? 'checked' : ''}>
+                    <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
+                    <div class="category-dropdown">
+                        <button class="category-btn">Categoria</button>
+                        <div class="dropdown-content">
+                            <button class="dropdown-item" data-category="daily">Atividades Diárias</button>
+                            <button class="dropdown-item" data-category="work">Trabalho</button>
+                            <button class="dropdown-item" data-category="leisure">Lazer</button>
+                            <button class="dropdown-item" data-category="other">Outros</button>
+                        </div>
+                    </div>
+                    <button class="edit-btn">Editar</button>
+                    <button class="delete-btn">Excluir</button>
+                    ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
+                </div>
+                <div class="notes">
+                    <textarea rows="3">${task.notes || ''}</textarea>
+                </div>
+            `;
+            li.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleTask(key);
+            });
+            li.querySelector('.task-text').addEventListener('click', () => toggleNotes(li));
+            const categoryBtn = li.querySelector('.category-btn');
+            categoryBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleCategoryDropdown(categoryBtn.parentElement);
+            });
+            li.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const newCategory = item.getAttribute('data-category');
+                    changeCategory(key, newCategory);
+                    const dropdownContent = item.closest('.dropdown-content');
+                    if (dropdownContent) {
+                        dropdownContent.style.display = 'none';
+                    }
+                });
+            });
+            li.querySelector('.edit-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                editTask(key);
+            });
+            li.querySelector('.delete-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteTask(key);
+            });
+            const notesIndicator = li.querySelector('.has-notes');
+            if (notesIndicator) {
+                notesIndicator.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    toggleNotes(li);
+                });
+            }
+            li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
+            li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
+            taskList.appendChild(li);
+        }
+
         function renderTasks() {
             onValue(tasksRef, (snapshot) => {
                 const tasks = snapshot.val() || {};
@@ -394,72 +566,7 @@
                         }
                         return b[1].priority - a[1].priority;
                     });
-                taskArray.forEach(([key, task]) => {
-                    const li = document.createElement('li');
-                    li.setAttribute('data-key', key); // Adiciona data-key para rolagem
-                    li.className = task.completed ? 'completed' : '';
-                    const isTaskBoldItalic = isPastDue(task.dueDate, task.completed);
-                    li.innerHTML = `
-                        <div class="task-row">
-                            <input type="checkbox" ${task.completed ? 'checked' : ''}>
-                            <span class="task-text ${isTaskBoldItalic ? 'bold-italic' : ''}">${task.text} | Data: ${formatDate(task.dueDate)} | Prioridade: ${task.priority}</span>
-                            <div class="category-dropdown">
-                                <button class="category-btn">Categoria</button>
-                                <div class="dropdown-content">
-                                    <button class="dropdown-item" data-category="daily">Atividades Diárias</button>
-                                    <button class="dropdown-item" data-category="work">Trabalho</button>
-                                    <button class="dropdown-item" data-category="leisure">Lazer</button>
-                                    <button class="dropdown-item" data-category="other">Outros</button>
-                                </div>
-                            </div>
-                            <button class="edit-btn">Editar</button>
-                            <button class="delete-btn">Excluir</button>
-                            ${task.notes && task.notes.trim() !== '' ? '<span class="has-notes">(Contém Nota)</span>' : ''}
-                        </div>
-                        <div class="notes">
-                            <textarea rows="3">${task.notes || ''}</textarea>
-                        </div>
-                    `;
-                    li.querySelector('input[type="checkbox"]').addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        toggleTask(key);
-                    });
-                    li.querySelector('.task-text').addEventListener('click', () => toggleNotes(li));
-                    const categoryBtn = li.querySelector('.category-btn');
-                    categoryBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        toggleCategoryDropdown(categoryBtn.parentElement);
-                    });
-                    li.querySelectorAll('.dropdown-item').forEach(item => {
-                        item.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            const newCategory = item.getAttribute('data-category');
-                            changeCategory(key, newCategory);
-                            const dropdownContent = item.closest('.dropdown-content');
-                            if (dropdownContent) {
-                                dropdownContent.style.display = 'none';
-                            }
-                        });
-                    });
-                    li.querySelector('.edit-btn').addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        editTask(key);
-                    });
-                    li.querySelector('.delete-btn').addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        deleteTask(key);
-                    });
-                    const notesIndicator = li.querySelector('.has-notes');
-                    if (notesIndicator) {
-                        notesIndicator.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            toggleNotes(li);
-                        });
-                    }
-                    li.querySelector('textarea').addEventListener('change', (e) => updateNotes(key, e.target));
-                    li.querySelector('textarea').addEventListener('click', (e) => e.stopPropagation());
-                    taskList.appendChild(li);
-                });
+                taskArray.forEach(([key, task]) => renderTask(key, task));
                 document.addEventListener('click', (e) => {
                     if (!e.target.closest('.category-dropdown')) {
                         document.querySelectorAll('.dropdown-content').forEach(content => {
@@ -479,8 +586,10 @@
         document.getElementById('leisureBtn').addEventListener('click', () => setCategory('leisure'));
         document.getElementById('otherBtn').addEventListener('click', () => setCategory('other'));
         document.getElementById('allBtn').addEventListener('click', () => setCategory('all'));
-
         document.getElementById('actionButton').addEventListener('click', saveTask);
+        document.getElementById('txtBtn').addEventListener('click', exportToTxt);
+        document.getElementById('searchBtn').addEventListener('click', searchTasks);
+        document.getElementById('backBtn').addEventListener('click', resetForm);
 
         // Adiciona suporte ao "Enter" nos campos
         document.getElementById('taskInput').addEventListener('keydown', (e) => {
